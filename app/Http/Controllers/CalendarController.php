@@ -116,8 +116,7 @@ class CalendarController extends Controller
                 {
                     $freq = strtoupper($request->recurrent_freq);
                     $count = $request->recurrent_count?:0;
-                    $interval = $request->recurrent_repeat?:0;
-                    $event->setRecurrence(array('RRULE:FREQ='.$freq.';COUNT='.$count.';INTERVAL='.$interval));
+                    $event->setRecurrence(array('RRULE:FREQ='.$freq.';COUNT='.$count.';'));
                 }
                 $caledar_result = $service->events->insert($calendarId, $event);
 
