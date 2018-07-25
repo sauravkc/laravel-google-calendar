@@ -98,7 +98,7 @@ class CalendarController extends Controller
         try {
             $start_date_time = $request->start_date;
             $end_date_time = $request->end_date;
-            $repeat = $request->repeat;
+            $timezone = $request->timezone;
 
             if ($this->access_token) {
                 $this->client->setAccessToken($this->access_token);
@@ -107,53 +107,19 @@ class CalendarController extends Controller
                 $event = new Google_Service_Calendar_Event([
                     'summary' => $request->summary,
                     'description' => $request->description,
-                    'start' => ['dateTime' => $start_date_time],
-                    'end' => ['dateTime' => $end_date_time],
+                    'start' => ['dateTime' => $start_date_time, 'timeZone' =>  $timezone],
+                    'end' => ['dateTime' => $end_date_time, 'timeZone' =>  $timezone],
                     'reminders' => ['useDefault' => true],
                 ]);
+
+                if(isset($request->recurrent_freq) && $request->recurrent_freq != 'none')
+                {
+                    $freq = strtoupper($request->recurrent_freq);
+                    $count = $request->recurrent_count?:0;
+                    $interval = $request->recurrent_repeat?:0;
+                    $event->setRecurrence(array('RRULE:FREQ='.$freq.';COUNT='.$count.';INTERVAL='.$interval));
+                }
                 $caledar_result = $service->events->insert($calendarId, $event);
-
-                switch ($request->recurrent) {
-                    case 'none':
-                        $additional_days = 0;
-                        break;
-                    case 'daily':
-                        $additional_days = 1;
-                        break;
-                    case 'weekly':
-                        $additional_days = 7;
-                        break;
-                    case 'bi-weekly':
-                        $additional_days = 14;
-                        break;
-                    case 'monthly ':
-                        $additional_days = 30;
-                        break;
-                    case 'yearly ':
-                        $additional_days = 365;
-                        break;
-                    default:
-                        $additional_days = 0;
-                }
-
-                if ($additional_days && $additional_days > 0) {
-                    $new_start_date = $start_date_time;
-                    $new_end_date = $end_date_time;
-                    for ($i = 0; $i <= $repeat; $i++) {
-                        $new_start_date = Carbon::parse($new_start_date)->addDays($additional_days)->toRfc3339String();
-                        $new_end_date = Carbon::parse($new_end_date)->addDays($additional_days)->toRfc3339String();
-                        $event = new Google_Service_Calendar_Event([
-                            'summary' => $request->summary,
-                            'description' => $request->description,
-                            'start' => ['dateTime' => $new_start_date],
-                            'end' => ['dateTime' => $new_end_date],
-                            'reminders' => ['useDefault' => true],
-                        ]);
-                        $caledar_result = $service->events->insert($calendarId, $event);
-
-                    }
-                }
-
 
                 if (!$caledar_result) {
                     $result['status'] = 500;
@@ -225,6 +191,7 @@ class CalendarController extends Controller
 
                 $startDateTime = Carbon::parse($request->start_date)->toRfc3339String();
                 $endDateTime = Carbon::parse($request->end_date)->toRfc3339String();
+                $timezone = $request->timezone;
 
 
                 $event = $service->events->get('primary', $id);
@@ -235,9 +202,11 @@ class CalendarController extends Controller
 
                 $start = new Google_Service_Calendar_EventDateTime();
                 $start->setDateTime($startDateTime);
+                $start->setTimeZone($timezone);
                 $event->setStart($start);
                 $end = new Google_Service_Calendar_EventDateTime();
                 $end->setDateTime($endDateTime);
+                $end->setTimeZone($timezone);
                 $event->setEnd($end);
 
                 $updatedEvent = $service->events->update('primary', $event->getId(), $event);

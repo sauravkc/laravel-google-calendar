@@ -83,7 +83,7 @@
                 </div>
 
                 <div class="links">
-                    <a href="{{route('api.login')}}">Google Calendar Login</a>
+                    <a href="{{route('api.login')}}" class="btn btn-primary">Google Calendar Login</a>
                 </div>
             </div>
         </div>
