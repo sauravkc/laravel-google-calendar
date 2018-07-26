@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events;
 use Carbon\Carbon;
 use Google_Client;
 use Google_Service_Calendar;
@@ -50,6 +51,7 @@ class CalendarController extends Controller
                 $result['status'] = 500;
                 $result['message'] = 'Login Successful';
                 $result['access_token'] = $access_token;
+                $result['client_id'] = $this->client->getClientId();
                 return response()->json($result);
             }
         } catch (\Exception $e) {
@@ -107,16 +109,16 @@ class CalendarController extends Controller
                 $event = new Google_Service_Calendar_Event([
                     'summary' => $request->summary,
                     'description' => $request->description,
-                    'start' => ['dateTime' => $start_date_time, 'timeZone' =>  $timezone],
-                    'end' => ['dateTime' => $end_date_time, 'timeZone' =>  $timezone],
+                    'start' => ['dateTime' => $start_date_time, 'timeZone' => $timezone],
+                    'end' => ['dateTime' => $end_date_time, 'timeZone' => $timezone],
                     'reminders' => ['useDefault' => true],
                 ]);
 
-                if(isset($request->recurrent_freq) && $request->recurrent_freq != 'none')
-                {
+
+                if (isset($request->recurrent_freq) && $request->recurrent_freq != 'none') {
                     $freq = strtoupper($request->recurrent_freq);
-                    $count = $request->recurrent_count?:0;
-                    $event->setRecurrence(array('RRULE:FREQ='.$freq.';COUNT='.$count.';'));
+                    $count = $request->recurrent_count ?: 0;
+                    $event->setRecurrence(array('RRULE:FREQ=' . $freq . ';COUNT=' . $count . ';'));
                 }
                 $caledar_result = $service->events->insert($calendarId, $event);
 
@@ -125,7 +127,10 @@ class CalendarController extends Controller
                     $result['message'] = 'Something went wrong';
                     return $result;
                 } else {
+                    $eventData = $this->mapDataForEvent($caledar_result);
+                    Events::create($eventData);
                     $result['status'] = 200;
+                    $result['data'] = $caledar_result;
                     $result['message'] = 'Event created successfully';
                 }
             } else {
@@ -154,7 +159,6 @@ class CalendarController extends Controller
 
                 $service = new Google_Service_Calendar($this->client);
                 $event = $service->events->get('primary', $id);
-
                 if (!$event) {
                     $result['status'] = 500;
                     $result['message'] = "Something went wrongl";
@@ -215,6 +219,11 @@ class CalendarController extends Controller
                     $result['status'] = 500;
                     $result['message'] = "Something went wrong";
                 }
+                $eventData = $this->mapDataForEvent($updatedEvent);
+                $event = Events::where('event_id', $eventData['event_id'])->first();
+                if ($event) {
+                    $event->update($eventData);
+                }
                 $result['status'] = 200;
                 $result['message'] = "Event updated successfully";
                 $result['data'] = $updatedEvent;
@@ -242,6 +251,12 @@ class CalendarController extends Controller
                 $this->client->setAccessToken($this->access_token);
                 $service = new Google_Service_Calendar($this->client);
                 $service->events->delete('primary', $id);
+
+                $event = Events::where('event_id', $id)->first();
+                if ($event) {
+                    $event->delete();
+                }
+
                 $result['status'] = 200;
                 $result['message'] = "Event deleted successfully";
             } else {
@@ -268,13 +283,35 @@ class CalendarController extends Controller
         if (request()->header('access-token') &&
             request()->header('token-type') &&
             request()->header('expires-in') &&
-            request()->header('created')) {
+            request()->header('created') &&
+            request()->header('client_id')) {
             $access_token = ["access_token" => request()->header('access-token'),
                 "token_type" => request()->header('token-type'),
                 "expires_in" => request()->header('expires-in'),
-                "created" => request()->header('created')];
+                "created" => request()->header('created'),
+                "client_id" => request()->header('client_id')];
         }
         return $access_token;
+    }
+
+    public function mapDataForEvent($json_data)
+    {
+        $eventData = ['client_id' => request()->header('client_id'),
+            'client_email' => $json_data->creator->email,
+            'client_name' => $json_data->creator->displayName,
+            'event_id' => $json_data->id,
+            'kind' => $json_data->kind,
+            'htmlLink' => $json_data->htmlLink,
+            'summary' => $json_data->summary,
+            'start_date' => $json_data->start->date,
+            'start_date_time' => $json_data->start->dateTime,
+            'start_time_zone' => $json_data->start->timeZone,
+            'end_date' => $json_data->end->date,
+            'end_date_time' => $json_data->end->dateTime,
+            'end_time_zone' => $json_data->end->timeZone,
+            'recurrence' => json_encode($json_data->recurrence)
+        ];
+        return $eventData;
     }
 
 
