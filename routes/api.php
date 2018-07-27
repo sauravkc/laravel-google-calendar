@@ -21,8 +21,6 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
  *
  */
 Route::group( [],function(){
-    Route::get('login', 'CalendarController@login')->name('api.login');
-
+    Route::get('login', 'Auth\GoogleAuthController@login')->name('api.login');
     Route::resource('calendar', 'CalendarController');
-
 });
